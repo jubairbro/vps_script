@@ -58,7 +58,7 @@ echo -e "${BLUE}╚════════════════════�
 
 # Update and install base packages
 apt update -y && apt upgrade -y
-apt install -y figlet toilet curl wget net-tools jq python3 python3-pip wondershaper fail2ban speedtest-cli vnstat
+apt install -y figlet toilet curl wget net-tools jq python3 python3-pip wondershaper fail2ban speedtest-cli vnstat ufw
 
 # Install SSH and OpenVPN
 apt install -y openssh-server openvpn
@@ -251,6 +251,14 @@ EOL
 systemctl enable fail2ban
 systemctl start fail2ban
 
+# Configure UFW (Firewall)
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw allow 1194/tcp
+ufw allow 10000:10003/tcp
+ufw --force enable
+
 #=============[ Create File Structure ]================
 mkdir -p /root/vps_script
 mkdir -p /var/log/xray
@@ -258,7 +266,7 @@ mkdir -p /root/backups
 cd /root/vps_script
 
 # Create main script and other scripts
-touch service_status.sh ssh_menu.sh vmess_menu.sh vless_menu.sh trojan_menu.sh shadow_menu.sh auto_reboot.sh speedtest.sh backup_restore.sh update_script.sh telegram_bot.sh log_manager.sh change_theme.sh
+touch service_status.sh ssh_menu.sh vmess_menu.sh vless_menu.sh trojan_menu.sh shadow_menu.sh auto_reboot.sh speedtest.sh backup_restore.sh update_script.sh telegram_bot.sh log_manager.sh change_theme.sh telegram_join.sh hidden_storage.sh user_stats.sh cleanup.sh firewall.sh monitoring.sh restart_services.sh
 chmod +x *.sh
 
 #=============[ Installation Complete ]================
