@@ -83,6 +83,9 @@ echo -e "${BLUE}║ [14] Telegram Join          ║${NC}"
 echo -e "${BLUE}║ [15] Hidden Storage         ║${NC}"
 echo -e "${BLUE}║ [16] User Stats             ║${NC}"
 echo -e "${BLUE}║ [17] Cleanup                ║${NC}"
+echo -e "${BLUE}║ [18] Firewall               ║${NC}"
+echo -e "${BLUE}║ [19] Monitoring             ║${NC}"
+echo -e "${BLUE}║ [20] Restart Services       ║${NC}"
 echo -e "${BLUE}╚═════════════════════════════╝${NC}"
 echo -e "${RED}[0] Exit${NC}"
 
@@ -143,6 +146,15 @@ case $MENU in
         ;;
     17)
         bash cleanup.sh
+        ;;
+    18)
+        bash firewall.sh
+        ;;
+    19)
+        bash monitoring.sh
+        ;;
+    20)
+        bash restart_services.sh
         ;;
     *)
         echo -e "${RED}Invalid input! Try again.${NC}"
