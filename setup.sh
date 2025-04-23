@@ -266,14 +266,29 @@ mkdir -p /root/backups
 cd /root/vps_script
 
 # Create main script and other scripts
-touch service_status.sh ssh_menu.sh vmess_menu.sh vless_menu.sh trojan_menu.sh shadow_menu.sh auto_reboot.sh speedtest.sh backup_restore.sh update_script.sh telegram_bot.sh log_manager.sh change_theme.sh telegram_join.sh hidden_storage.sh user_stats.sh cleanup.sh firewall.sh monitoring.sh restart_services.sh
+touch main.sh service_status.sh ssh_menu.sh vmess_menu.sh vless_menu.sh trojan_menu.sh shadow_menu.sh auto_reboot.sh speedtest.sh backup_restore.sh update_script.sh telegram_bot.sh log_manager.sh change_theme.sh telegram_join.sh hidden_storage.sh user_stats.sh cleanup.sh firewall.sh monitoring.sh restart_services.sh
 chmod +x *.sh
+
+#=============[ Setup Menu Command ]================
+echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║         Setting Up Menu Command      ║${NC}"
+echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
+
+# Create the menu command in /usr/local/bin
+cat > /usr/local/bin/menu << EOL
+#!/bin/bash
+/root/vps_script/main.sh
+EOL
+
+# Set permissions for the menu command
+chmod +x /usr/local/bin/menu
+echo -e "${GREEN}Menu command setup completed! Now you can run the script by typing 'menu' from anywhere.${NC}"
 
 #=============[ Installation Complete ]================
 echo -e "${GREEN}╔══════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║      Installation Completed          ║${NC}"
-echo -e "${GREEN}║      Run: ./main.sh                 ║${NC}"
+echo -e "${GREEN}║      Run: menu                      ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════╝${NC}"
 
 # Automatically run main script
-bash main.sh
+menu
