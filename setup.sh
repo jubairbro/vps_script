@@ -12,7 +12,7 @@ NC='\033[0m' # No Color
 
 # Header logo
 echo -e "${RED}"
-toilet -f big -F gay "VPS SETUP"
+figlet -f big "VPS SETUP"
 echo -e "${NC}"
 
 # System check
@@ -43,13 +43,20 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Internet connection check
-ping -c 1 google.com > /dev/null 2>&1
+# Internet connection check using curl
+echo -e "${YELLOW}Checking Internet Connection...${NC}"
+curl -s --connect-timeout 5 http://google.com > /dev/null 2>&1
 if [ $? -ne 0 ]; then
-    echo -e "${RED}No internet connection!${NC}"
-    exit 1
+    echo -e "${RED}No internet connection detected!${NC}"
+    echo -e "${YELLOW}Some features (e.g., package installation, updates) may not work without internet.${NC}"
+    read -p "Do you want to continue anyway? (y/n): " CONTINUE
+    if [ "$CONTINUE" != "y" ]; then
+        echo -e "${RED}Exiting script.${NC}"
+        exit 1
+    fi
+else
+    echo -e "${GREEN}Internet Connection: OK${NC}"
 fi
-echo -e "${GREEN}Internet Connection: OK${NC}"
 
 #=============[ Install Required Packages ]================
 echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
@@ -57,25 +64,25 @@ echo -e "${BLUE}║         Installing Packages          ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
 
 # Update and install base packages
-apt update -y && apt upgrade -y
-apt install -y figlet toilet curl wget net-tools jq python3 python3-pip wondershaper fail2ban speedtest-cli vnstat ufw
+apt update -y && apt upgrade -y || echo -e "${YELLOW}Failed to update packages (possibly no internet). Continuing...${NC}"
+apt install -y figlet toilet toilet-fonts curl wget net-tools jq python3 python3-pip wondershaper fail2ban speedtest-cli vnstat ufw || echo -e "${YELLOW}Failed to install some packages (possibly no internet). Continuing...${NC}"
 
 # Install SSH and OpenVPN
-apt install -y openssh-server openvpn
-systemctl enable ssh
-systemctl start ssh
+apt install -y openssh-server openvpn || echo -e "${YELLOW}Failed to install SSH/OpenVPN (possibly no internet). Continuing...${NC}"
+systemctl enable ssh > /dev/null 2>&1
+systemctl start ssh > /dev/null 2>&1
 
 # Configure OpenVPN
-wget -O /etc/openvpn/server.conf "https://raw.githubusercontent.com/OpenVPN/openvpn/master/sample-config-files/server.conf"
-sed -i 's/port 1194/port 1194/' /etc/openvpn/server.conf
-sed -i 's/proto udp/proto tcp/' /etc/openvpn/server.conf
-systemctl enable openvpn@server
-systemctl start openvpn@server
+wget -O /etc/openvpn/server.conf "https://raw.githubusercontent.com/OpenVPN/openvpn/master/sample-config-files/server.conf" || echo -e "${YELLOW}Failed to download OpenVPN config (possibly no internet). Continuing...${NC}"
+sed -i 's/port 1194/port 1194/' /etc/openvpn/server.conf 2>/dev/null
+sed -i 's/proto udp/proto tcp/' /etc/openvpn/server.conf 2>/dev/null
+systemctl enable openvpn@server > /dev/null 2>&1
+systemctl start openvpn@server > /dev/null 2>&1
 
 # Install NGINX
-apt install -y nginx
-systemctl enable nginx
-systemctl start nginx
+apt install -y nginx || echo -e "${YELLOW}Failed to install Nginx (possibly no internet). Continuing...${NC}"
+systemctl enable nginx > /dev/null 2>&1
+systemctl start nginx > /dev/null 2>&1
 
 # Configure NGINX for WebSocket
 cat > /etc/nginx/conf.d/vps.conf << EOL
@@ -102,19 +109,19 @@ server {
     }
 }
 EOL
-systemctl restart nginx
+systemctl restart nginx > /dev/null 2>&1
 
 # Install Dropbear
-apt install -y dropbear
-sed -i 's/NO_START=1/NO_START=0/' /etc/default/dropbear
-sed -i 's/DROPBEAR_PORT=22/DROPBEAR_PORT=109/' /etc/default/dropbear
-systemctl enable dropbear
-systemctl start dropbear
+apt install -y dropbear || echo -e "${YELLOW}Failed to install Dropbear (possibly no internet). Continuing...${NC}"
+sed -i 's/NO_START=1/NO_START=0/' /etc/default/dropbear 2>/dev/null
+sed -i 's/DROPBEAR_PORT=22/DROPBEAR_PORT=109/' /etc/default/dropbear 2>/dev/null
+systemctl enable dropbear > /dev/null 2>&1
+systemctl start dropbear > /dev/null 2>&1
 
 # Install Xray
-bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
-systemctl enable xray
-systemctl start xray
+bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install || echo -e "${YELLOW}Failed to install Xray (possibly no internet). Continuing...${NC}"
+systemctl enable xray > /dev/null 2>&1
+systemctl start xray > /dev/null 2>&1
 
 # Configure Xray for VMess, VLess, Trojan, Shadowsocks
 mkdir -p /etc/xray
@@ -182,10 +189,10 @@ cat > /etc/xray/config.json << EOL
   ]
 }
 EOL
-systemctl restart xray
+systemctl restart xray > /dev/null 2>&1
 
 # Install HAProxy
-apt install -y haproxy
+apt install -y haproxy || echo -e "${YELLOW}Failed to install HAProxy (possibly no internet). Continuing...${NC}"
 cat > /etc/haproxy/haproxy.cfg << EOL
 global
     log /dev/log local0
@@ -222,17 +229,17 @@ backend ws_back
     balance roundrobin
     server ws1 127.0.0.1:10000 check
 EOL
-systemctl enable haproxy
-systemctl start haproxy
+systemctl enable haproxy > /dev/null 2>&1
+systemctl start haproxy > /dev/null 2>&1
 
 # Install SlowDNS
-wget -O /root/slowdns.sh "https://raw.githubusercontent.com/ilyassnobee/slowdns/main/install.sh"
-bash /root/slowdns.sh
-systemctl enable slowdns
-systemctl start slowdns
+wget -O /root/slowdns.sh "https://raw.githubusercontent.com/ilyassnobee/slowdns/main/install.sh" || echo -e "${YELLOW}Failed to download SlowDNS script (possibly no internet). Continuing...${NC}"
+bash /root/slowdns.sh > /dev/null 2>&1
+systemctl enable slowdns > /dev/null 2>&1
+systemctl start slowdns > /dev/null 2>&1
 
 # Install Python dependencies for Telegram bot
-pip3 install python-telegram-bot
+pip3 install python-telegram-bot > /dev/null 2>&1 || echo -e "${YELLOW}Failed to install python-telegram-bot (possibly no internet). Continuing...${NC}"
 
 # Configure Fail2Ban for security
 cat > /etc/fail2ban/jail.local << EOL
@@ -248,16 +255,16 @@ filter  = sshd
 logpath = /var/log/auth.log
 maxretry = 5
 EOL
-systemctl enable fail2ban
-systemctl start fail2ban
+systemctl enable fail2ban > /dev/null 2>&1
+systemctl start fail2ban > /dev/null 2>&1
 
 # Configure UFW (Firewall)
-ufw allow 22/tcp
-ufw allow 80/tcp
-ufw allow 443/tcp
-ufw allow 1194/tcp
-ufw allow 10000:10003/tcp
-ufw --force enable
+ufw allow 22/tcp > /dev/null 2>&1
+ufw allow 80/tcp > /dev/null 2>&1
+ufw allow 443/tcp > /dev/null 2>&1
+ufw allow 1194/tcp > /dev/null 2>&1
+ufw allow 10000:10003/tcp > /dev/null 2>&1
+ufw --force enable > /dev/null 2>&1
 
 #=============[ Create File Structure ]================
 mkdir -p /root/vps_script
