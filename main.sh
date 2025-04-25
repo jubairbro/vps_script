@@ -38,6 +38,7 @@ echo -e "${BLUE}║ [17] Cleanup                ║${NC}"
 echo -e "${BLUE}║ [18] Firewall               ║${NC}"
 echo -e "${BLUE}║ [19] Monitoring             ║${NC}"
 echo -e "${BLUE}║ [20] Restart Services       ║${NC}"
+echo -e "${BLUE}║ [21] Set Domain & Nameservers ║${NC}"  # New Option
 echo -e "${BLUE}║ [0] Exit                    ║${NC}"
 echo -e "${BLUE}╚═════════════════════════════╝${NC}"
 
@@ -117,8 +118,11 @@ case $OPTION in
     20)
         bash restart_services.sh
         ;;
+    21)  # New Option Handler
+        setup_domain_and_ns
+        ;;
     *)
-        echo -e "${RED}Invalid option! Please select a number between 0 and 20.${NC}"
+        echo -e "${RED}Invalid option! Please select a number between 0 and 21.${NC}"
         sleep 2
         bash main.sh
         ;;
