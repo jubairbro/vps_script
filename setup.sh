@@ -46,7 +46,7 @@ check_system() {
     # Check storage (minimum 2 GB free)
     STORAGE=$(df -h / | tail -1 | awk '{print $4}' | sed 's/G//')
     if [ "${STORAGE%.*}" -lt 2 ]; then
-        echo -e "${RED}Insufficient storage! Minimum 2 GB free required, found $STORAGE GB.${NC}"
+        echo -e "${RED}Insensitive storage! Minimum 2 GB free required, found $STORAGE GB.${NC}"
         exit 1
     fi
     echo -e "${GREEN}Storage: $STORAGE GB free - Sufficient${NC}"
@@ -67,11 +67,30 @@ check_system() {
         echo -e "${YELLOW}This module is required for OpenVPN.${NC}"
         echo -e "${YELLOW}Possible solutions:${NC}"
         echo -e "${YELLOW}- If you're using a VPS, contact your provider to enable the 'tun' module.${NC}"
-        echoing -e "${YELLOW}- If you're using OpenVZ, you may need to enable TUN/TAP in the VPS control panel.${NC}"
+        echo -e "${YELLOW}- If you're using OpenVZ, you may need to enable TUN/TAP in the VPS control panel.${NC}"
         echo -e "${YELLOW}- Alternatively, you can use a different virtualization type (e.g., KVM) that supports 'tun' by default.${NC}"
         exit 1
     fi
     echo -e "${GREEN}Kernel module 'tun': Available${NC}"
+
+    # Check for systemd availability
+    if ! command -v systemctl &> /dev/null; then
+        echo -e "${YELLOW}systemctl not found! Attempting to install systemd...${NC}"
+        apt update && apt install -y systemd || {
+            echo -e "${RED}Failed to install systemd! Using alternative service management method.${NC}"
+            USE_SYSTEMD=false
+        }
+        if command -v systemctl &> /dev/null; then
+            echo -e "${GREEN}systemd installed successfully.${NC}"
+            USE_SYSTEMD=true
+        else
+            USE_SYSTEMD=false
+            echo -e "${YELLOW}systemd unavailable. Using 'service' command instead.${NC}"
+        fi
+    else
+        USE_SYSTEMD=true
+        echo -e "${GREEN}systemd: Available${NC}"
+    fi
 
     sleep 2
 }
@@ -86,29 +105,13 @@ setup_network() {
     echo "nameserver 8.8.4.4" >> /etc/resolv.conf
     echo -e "${GREEN}DNS set to Google DNS (8.8.8.8, 8.8.4.4)${NC}"
 
-    # Display network interface status for diagnostics
-    echo -e "${YELLOW}Network Interface Status:${NC}"
-    ip a || {
-        echo -e "${RED}Failed to fetch network interface status!${NC}"
-    }
-
-    # Display current DNS settings
-    echo -e "${YELLOW}Current DNS Settings:${NC}"
-    cat /etc/resolv.conf || {
-        echo -e "${RED}Failed to read /etc/resolv.conf!${NC}"
-    }
-
-    # Internet connection check using curl (more reliable than ping)
-    echo -e "${YELLOW}Checking internet connection...${NC}"
-    curl -s --connect-timeout 5 http://www.google.com > /dev/null
+    # Internet connection check
+    ping -c 1 8.8.8.8 > /dev/null 2>&1
     if [ $? -ne 0 ]; then
         echo -e "${RED}No internet connection!${NC}"
         echo -e "${YELLOW}Please check your network configuration:${NC}"
         echo -e "${YELLOW}- Ensure your network interface is up (use 'ip a' to check).${NC}"
-        echo -e "${YELLOW}- Verify DNS settings in /etc/resolv.conf (should have 'nameserver 8.8.8.8').${NC}"
-        echo -e "${YELLOW}- Test DNS resolution (use 'nslookup google.com').${NC}"
-        echo -e "${YELLOW}- Test connectivity (use 'curl -v http://www.google.com').${NC}"
-        echo -e "${YELLOW}- Check if your VPS provider blocks outbound traffic (e.g., ICMP or HTTP).${NC}"
+        echo -e "${YELLOW}- Verify DNS settings in /etc/resolv.conf.${NC}"
         echo -e "${YELLOW}- Contact your VPS provider if the issue persists.${NC}"
         exit 1
     fi
@@ -144,14 +147,41 @@ install_ssh() {
         echo -e "${RED}Failed to install openssh-server!${NC}"
         exit 1
     }
-    systemctl enable ssh || {
-        echo -e "${RED}Failed to enable SSH service!${NC}"
-        exit 1
-    }
-    systemctl start ssh || {
-        echo -e "${RED}Failed to start SSH service!${NC}"
-        exit 1
-    }
+
+    # Enable and start SSH service based on systemd availability
+    if [ "$USE_SYSTEMD" = true ]; then
+        systemctl enable ssh || {
+            echo -e "${RED}Failed to enable SSH service!${NC}"
+            exit 1
+        }
+        systemctl start ssh || {
+            echo -e "${RED}Failed to start SSH service!${NC}"
+            exit 1
+        }
+    else
+        # Use service command for non-systemd systems
+        if command -v service &> /dev/null; then
+            service ssh enable || {
+                echo -e "${RED}Failed to enable SSH service using service command!${NC}"
+                exit 1
+            }
+            service ssh start || {
+                echo -e "${RED}Failed to start SSH service using service command!${NC}"
+                exit 1
+            }
+        else
+            # Manual start if service command is also unavailable
+            if [ -f /etc/init.d/ssh ]; then
+                /etc/init.d/ssh start || {
+                    echo -e "${RED}Failed to start SSH service manually!${NC}"
+                    exit 1
+                }
+            else
+                echo -e "${RED}SSH init script not found! Cannot start SSH service.${NC}"
+                exit 1
+            fi
+        fi
+    fi
     echo -e "${GREEN}SSH installed and started successfully.${NC}"
 
     # Generate random user for SSH
@@ -187,14 +217,41 @@ install_openvpn() {
     }
     sed -i 's/port 1194/port 1194/' /etc/openvpn/server.conf
     sed -i 's/proto udp/proto tcp/' /etc/openvpn/server.conf
-    systemctl enable openvpn@server || {
-        echo -e "${RED}Failed to enable OpenVPN service!${NC}"
-        exit 1
-    }
-    systemctl start openvpn@server || {
-        echo -e "${RED}Failed to start OpenVPN service!${NC}"
-        exit 1
-    }
+
+    # Enable and start OpenVPN service based on systemd availability
+    if [ "$USE_SYSTEMD" = true ]; then
+        systemctl enable openvpn@server || {
+            echo -e "${RED}Failed to enable OpenVPN service!${NC}"
+            exit 1
+        }
+        systemctl start openvpn@server || {
+            echo -e "${RED}Failed to start OpenVPN service!${NC}"
+            exit 1
+        }
+    else
+        # Use service command for non-systemd systems
+        if command -v service &> /dev/null; then
+            service openvpn@server enable || {
+                echo -e "${RED}Failed to enable OpenVPN service using service command!${NC}"
+                exit 1
+            }
+            service openvpn@server start || {
+                echo -e "${RED}Failed to start OpenVPN service using service command!${NC}"
+                exit 1
+            }
+        else
+            # Manual start if service command is unavailable
+            if [ -f /etc/init.d/openvpn ]; then
+                /etc/init.d/openvpn start || {
+                    echo -e "${RED}Failed to start OpenVPN service manually!${NC}"
+                    exit 1
+                }
+            else
+                echo -e "${RED}OpenVPN init script not found! Cannot start OpenVPN service.${NC}"
+                exit 1
+            fi
+        fi
+    fi
     echo -e "${GREEN}OpenVPN installed and started successfully.${NC}"
 
     sleep 2
@@ -209,14 +266,41 @@ install_nginx() {
         echo -e "${RED}Failed to install NGINX!${NC}"
         exit 1
     }
-    systemctl enable nginx || {
-        echo -e "${RED}Failed to enable NGINX service!${NC}"
-        exit 1
-    }
-    systemctl start nginx || {
-        echo -e "${RED}Failed to start NGINX service!${NC}"
-        exit 1
-    }
+
+    # Enable and start NGINX service based on systemd availability
+    if [ "$USE_SYSTEMD" = true ]; then
+        systemctl enable nginx || {
+            echo -e "${RED}Failed to enable NGINX service!${NC}"
+            exit 1
+        }
+        systemctl start nginx || {
+            echo -e "${RED}Failed to start NGINX service!${NC}"
+            exit 1
+        }
+    else
+        # Use service command for non-systemd systems
+        if command -v service &> /dev/null; then
+            service nginx enable || {
+                echo -e "${RED}Failed to enable NGINX service using service command!${NC}"
+                exit 1
+            }
+            service nginx start || {
+                echo -e "${RED}Failed to start NGINX service using service command!${NC}"
+                exit 1
+            }
+        else
+            # Manual start if service command is unavailable
+            if [ -f /etc/init.d/nginx ]; then
+                /etc/init.d/nginx start || {
+                    echo -e "${RED}Failed to start NGINX service manually!${NC}"
+                    exit 1
+                }
+            else
+                echo -e "${RED}NGINX init script not found! Cannot start NGINX service.${NC}"
+                exit 1
+            fi
+        fi
+    fi
 
     # Configure NGINX for WebSocket
     cat > /etc/nginx/conf.d/vps.conf << EOL
@@ -243,10 +327,31 @@ server {
     }
 }
 EOL
-    systemctl restart nginx || {
-        echo -e "${RED}Failed to restart NGINX!${NC}"
-        exit 1
-    }
+
+    # Restart NGINX based on systemd availability
+    if [ "$USE_SYSTEMD" = true ]; then
+        systemctl restart nginx || {
+            echo -e "${RED}Failed to restart NGINX!${NC}"
+            exit 1
+        }
+    else
+        if command -v service &> /dev/null; then
+            service nginx restart || {
+                echo -e "${RED}Failed to restart NGINX using service command!${NC}"
+                exit 1
+            }
+        else
+            if [ -f /etc/init.d/nginx ]; then
+                /etc/init.d/nginx restart || {
+                    echo -e "${RED}Failed to restart NGINX manually!${NC}"
+                    exit 1
+                }
+            else
+                echo -e "${RED}NGINX init script not found! Cannot restart NGINX service.${NC}"
+                exit 1
+            fi
+        fi
+    fi
     echo -e "${GREEN}NGINX installed and configured successfully.${NC}"
 
     sleep 2
@@ -263,14 +368,41 @@ install_dropbear() {
     }
     sed -i 's/NO_START=1/NO_START=0/' /etc/default/dropbear
     sed -i 's/DROPBEAR_PORT=22/DROPBEAR_PORT=109/' /etc/default/dropbear
-    systemctl enable dropbear || {
-        echo -e "${RED}Failed to enable Dropbear service!${NC}"
-        exit 1
-    }
-    systemctl start dropbear || {
-        echo -e "${RED}Failed to start Dropbear service!${NC}"
-        exit 1
-    }
+
+    # Enable and start Dropbear service based on systemd availability
+    if [ "$USE_SYSTEMD" = true ]; then
+        systemctl enable dropbear || {
+            echo -e "${RED}Failed to enable Dropbear service!${NC}"
+            exit 1
+        }
+        systemctl start dropbear || {
+            echo -e "${RED}Failed to start Dropbear service!${NC}"
+            exit 1
+        }
+    else
+        # Use service command for non-systemd systems
+        if command -v service &> /dev/null; then
+            service dropbear enable || {
+                echo -e "${RED}Failed to enable Dropbear service using service command!${NC}"
+                exit 1
+            }
+            service dropbear start || {
+                echo -e "${RED}Failed to start Dropbear service using service command!${NC}"
+                exit 1
+            }
+        else
+            # Manual start if service command is unavailable
+            if [ -f /etc/init.d/dropbear ]; then
+                /etc/init.d/dropbear start || {
+                    echo -e "${RED}Failed to start Dropbear service manually!${NC}"
+                    exit 1
+                }
+            else
+                echo -e "${RED}Dropbear init script not found! Cannot start Dropbear service.${NC}"
+                exit 1
+            fi
+        fi
+    fi
     echo -e "${GREEN}Dropbear installed and started successfully.${NC}"
 
     sleep 2
@@ -285,14 +417,41 @@ install_xray() {
         echo -e "${RED}Failed to install Xray!${NC}"
         exit 1
     }
-    systemctl enable xray || {
-        echo -e "${RED}Failed to enable Xray service!${NC}"
-        exit 1
-    }
-    systemctl start xray || {
-        echo -e "${RED}Failed to start Xray service!${NC}"
-        exit 1
-    }
+
+    # Enable and start Xray service based on systemd availability
+    if [ "$USE_SYSTEMD" = true ]; then
+        systemctl enable xray || {
+            echo -e "${RED}Failed to enable Xray service!${NC}"
+            exit 1
+        }
+        systemctl start xray || {
+            echo -e "${RED}Failed to start Xray service!${NC}"
+            exit 1
+        }
+    else
+        # Use service command for non-systemd systems
+        if command -v service &> /dev/null; then
+            service xray enable || {
+                echo -e "${RED}Failed to enable Xray service using service command!${NC}"
+                exit 1
+            }
+            service xray start || {
+                echo -e "${RED}Failed to start Xray service using service command!${NC}"
+                exit 1
+            }
+        else
+            # Manual start if service command is unavailable
+            if [ -f /etc/init.d/xray ]; then
+                /etc/init.d/xray start || {
+                    echo -e "${RED}Failed to start Xray service manually!${NC}"
+                    exit 1
+                }
+            else
+                echo -e "${RED}Xray init script not found! Cannot start Xray service.${NC}"
+                exit 1
+            fi
+        fi
+    fi
 
     # Configure Xray
     mkdir -p /etc/xray
@@ -360,10 +519,31 @@ install_xray() {
   ]
 }
 EOL
-    systemctl restart xray || {
-        echo -e "${RED}Failed to restart Xray!${NC}"
-        exit 1
-    }
+
+    # Restart Xray based on systemd availability
+    if [ "$USE_SYSTEMD" = true ]; then
+        systemctl restart xray || {
+            echo -e "${RED}Failed to restart Xray!${NC}"
+            exit 1
+        }
+    else
+        if command -v service &> /dev/null; then
+            service xray restart || {
+                echo -e "${RED}Failed to restart Xray using service command!${NC}"
+                exit 1
+            }
+        else
+            if [ -f /etc/init.d/xray ]; then
+                /etc/init.d/xray restart || {
+                    echo -e "${RED}Failed to restart Xray manually!${NC}"
+                    exit 1
+                }
+            else
+                echo -e "${RED}Xray init script not found! Cannot restart Xray service.${NC}"
+                exit 1
+            fi
+        fi
+    fi
     echo -e "${GREEN}Xray installed and configured successfully.${NC}"
 
     # Encrypt the config file
@@ -428,14 +608,41 @@ backend ws_back
     balance roundrobin
     server ws1 127.0.0.1:10000 check
 EOL
-    systemctl enable haproxy || {
-        echo -e "${RED}Failed to enable HAProxy service!${NC}"
-        exit 1
-    }
-    systemctl start haproxy || {
-        echo -e "${RED}Failed to start HAProxy service!${NC}"
-        exit 1
-    }
+
+    # Enable and start HAProxy service based on systemd availability
+    if [ "$USE_SYSTEMD" = true ]; then
+        systemctl enable haproxy || {
+            echo -e "${RED}Failed to enable HAProxy service!${NC}"
+            exit 1
+        }
+        systemctl start haproxy || {
+            echo -e "${RED}Failed to start HAProxy service!${NC}"
+            exit 1
+        }
+    else
+        # Use service command for non-systemd systems
+        if command -v service &> /dev/null; then
+            service haproxy enable || {
+                echo -e "${RED}Failed to enable HAProxy service using service command!${NC}"
+                exit 1
+            }
+            service haproxy start || {
+                echo -e "${RED}Failed to start HAProxy service using service command!${NC}"
+                exit 1
+            }
+        else
+            # Manual start if service command is unavailable
+            if [ -f /etc/init.d/haproxy ]; then
+                /etc/init.d/haproxy start || {
+                    echo -e "${RED}Failed to start HAProxy service manually!${NC}"
+                    exit 1
+                }
+            else
+                echo -e "${RED}HAProxy init script not found! Cannot start HAProxy service.${NC}"
+                exit 1
+            fi
+        fi
+    fi
     echo -e "${GREEN}HAProxy installed and configured successfully.${NC}"
 
     sleep 2
@@ -454,14 +661,41 @@ install_slowdns() {
         echo -e "${RED}Failed to install SlowDNS!${NC}"
         exit 1
     }
-    systemctl enable slowdns || {
-        echo -e "${RED}Failed to enable SlowDNS service!${NC}"
-        exit 1
-    }
-    systemctl start slowdns || {
-        echo -e "${RED}Failed to start SlowDNS service!${NC}"
-        exit 1
-    }
+
+    # Enable and start SlowDNS service based on systemd availability
+    if [ "$USE_SYSTEMD" = true ]; then
+        systemctl enable slowdns || {
+            echo -e "${RED}Failed to enable SlowDNS service!${NC}"
+            exit 1
+        }
+        systemctl start slowdns || {
+            echo -e "${RED}Failed to start SlowDNS service!${NC}"
+            exit 1
+        }
+    else
+        # Use service command for non-systemd systems
+        if command -v service &> /dev/null; then
+            service slowdns enable || {
+                echo -e "${RED}Failed to enable SlowDNS service using service command!${NC}"
+                exit 1
+            }
+            service slowdns start || {
+                echo -e "${RED}Failed to start SlowDNS service using service command!${NC}"
+                exit 1
+            }
+        else
+            # Manual start if service command is unavailable
+            if [ -f /etc/init.d/slowdns ]; then
+                /etc/init.d/slowdns start || {
+                    echo -e "${RED}Failed to start SlowDNS service manually!${NC}"
+                    exit 1
+                }
+            else
+                echo -e "${RED}SlowDNS init script not found! Cannot start SlowDNS service.${NC}"
+                exit 1
+            fi
+        fi
+    fi
     echo -e "${GREEN}SlowDNS installed and started successfully.${NC}"
 
     sleep 2
@@ -500,14 +734,41 @@ filter  = sshd
 logpath = /var/log/auth.log
 maxretry = 5
 EOL
-    systemctl enable fail2ban || {
-        echo -e "${RED}Failed to enable Fail2Ban service!${NC}"
-        exit 1
-    }
-    systemctl start fail2ban || {
-        echo -e "${RED}Failed to start Fail2Ban service!${NC}"
-        exit 1
-    }
+
+    # Enable and start Fail2Ban service based on systemd availability
+    if [ "$USE_SYSTEMD" = true ]; then
+        systemctl enable fail2ban || {
+            echo -e "${RED}Failed to enable Fail2Ban service!${NC}"
+            exit 1
+        }
+        systemctl start fail2ban || {
+            echo -e "${RED}Failed to start Fail2Ban service!${NC}"
+            exit 1
+        }
+    else
+        # Use service command for non-systemd systems
+        if command -v service &> /dev/null; then
+            service fail2ban enable || {
+                echo -e "${RED}Failed to enable Fail2Ban service using service command!${NC}"
+                exit 1
+            }
+            service fail2ban start || {
+                echo -e "${RED}Failed to start Fail2Ban service using service command!${NC}"
+                exit 1
+            }
+        else
+            # Manual start if service command is unavailable
+            if [ -f /etc/init.d/fail2ban ]; then
+                /etc/init.d/fail2ban start || {
+                    echo -e "${RED}Failed to start Fail2Ban service manually!${NC}"
+                    exit 1
+                }
+            else
+                echo -e "${RED}Fail2Ban init script not found! Cannot start Fail2Ban service.${NC}"
+                exit 1
+            fi
+        fi
+    fi
     echo -e "${GREEN}Fail2Ban configured successfully.${NC}"
 
     # Setup iptables rules for DDoS protection
