@@ -38,7 +38,7 @@ echo -e "${BLUE}║ [17] Cleanup                ║${NC}"
 echo -e "${BLUE}║ [18] Firewall               ║${NC}"
 echo -e "${BLUE}║ [19] Monitoring             ║${NC}"
 echo -e "${BLUE}║ [20] Restart Services       ║${NC}"
-echo -e "${BLUE}║ [21] Set Domain & Nameservers ║${NC}"  # New Option
+echo -e "${BLUE}║ [21] Set Domain & Nameservers ║${NC}"  
 echo -e "${BLUE}║ [0] Exit                    ║${NC}"
 echo -e "${BLUE}╚═════════════════════════════╝${NC}"
 
