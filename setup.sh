@@ -100,69 +100,63 @@ setup_network() {
     clear
     display_header "Setting Up Network"
 
-    # Check network interface status
-    echo -e "${YELLOW}Checking network interface status...${NC}"
-    ip a > /tmp/network_status.txt 2>&1
-    if grep -q "state UP" /tmp/network_status.txt; then
-        echo -e "${GREEN}Network interface is up.${NC}"
-    else
-        echo -e "${RED}Network interface is down or not configured!${NC}"
-        echo -e "${YELLOW}Network status:${NC}"
-        cat /tmp/network_status.txt
-        echo -e "${YELLOW}Please ensure your network interface is up (use 'ip a' to check).${NC}"
-        echo -e "${YELLOW}You may need to configure it using 'ifup' or contact your VPS provider.${NC}"
-        exit 1
-    fi
-    rm -f /tmp/network_status.txt
-
     # Setup DNS to avoid resolution issues
-    echo -e "${YELLOW}Setting up DNS...${NC}"
-    if [ -f /etc/resolv.conf ]; then
-        mv /etc/resolv.conf /etc/resolv.conf.bak 2>/dev/null
-    fi
     echo "nameserver 8.8.8.8" > /etc/resolv.conf
     echo "nameserver 8.8.4.4" >> /etc/resolv.conf
-    # Ensure the file is not overwritten by the system
-    chattr +i /etc/resolv.conf 2>/dev/null || echo -e "${YELLOW}Warning: Could not lock /etc/resolv.conf. It may be overwritten by the system.${NC}"
     echo -e "${GREEN}DNS set to Google DNS (8.8.8.8, 8.8.4.4)${NC}"
 
-    # Verify DNS resolution
-    echo -e "${YELLOW}Verifying DNS resolution...${NC}"
-    nslookup google.com > /tmp/dns_test.txt 2>&1
-    if grep -q "Name:.*google.com" /tmp/dns_test.txt; then
-        echo -e "${GREEN}DNS resolution: OK${NC}"
-    else
-        echo -e "${RED}DNS resolution failed!${NC}"
-        echo -e "${YELLOW}DNS test output:${NC}"
-        cat /tmp/dns_test.txt
-        echo -e "${YELLOW}Possible issues:${NC}"
-        echo -e "${YELLOW}- Your VPS provider may be blocking DNS traffic.${NC}"
-        echo -e "${YELLOW}- /etc/resolv.conf might be overwritten by the system.${NC}"
-        echo -e "${YELLOW}- Check if the nameservers are reachable (use 'ping 8.8.8.8').${NC}"
-        exit 1
-    fi
-    rm -f /tmp/dns_test.txt
+    # Internet connection check with multiple methods
+    echo -e "${YELLOW}Checking internet connection...${NC}"
 
-    # Internet connection check
-    echo -e "${YELLOW}Checking internet connectivity...${NC}"
-    ping -c 1 8.8.8.8 > /tmp/ping_test.txt 2>&1
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}Internet Connection: OK${NC}"
+    # Method 1: Use curl to check connectivity to google.com
+    if command -v curl &> /dev/null; then
+        curl -s --connect-timeout 5 http://google.com > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}Internet Connection (curl method): OK${NC}"
+            sleep 2
+            return 0
+        else
+            echo -e "${YELLOW}curl method failed. Trying next method...${NC}"
+        fi
     else
-        echo -e "${RED}No internet connection!${NC}"
-        echo -e "${YELLOW}Ping test output:${NC}"
-        cat /tmp/ping_test.txt
-        echo -e "${YELLOW}Please check your network configuration:${NC}"
-        echo -e "${YELLOW}- Ensure your network interface is up (use 'ip a' to check).${NC}"
-        echo -e "${YELLOW}- Verify DNS settings in /etc/resolv.conf:${NC}"
-        cat /etc/resolv.conf
-        echo -e "${YELLOW}- Check if the nameservers are reachable (use 'ping 8.8.8.8').${NC}"
-        echo -e "${YELLOW}- Contact your VPS provider if the issue persists.${NC}"
-        exit 1
+        echo -e "${YELLOW}curl not found. Skipping curl method...${NC}"
     fi
-    rm -f /tmp/ping_test.txt
 
-    sleep 2
+    # Method 2: Use ping to check connectivity to 8.8.8.8
+    if command -v ping &> /dev/null; then
+        ping -c 1 8.8.8.8 > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}Internet Connection (ping method): OK${NC}"
+            sleep 2
+            return 0
+        else
+            echo -e "${YELLOW}ping method failed. Trying next method...${NC}"
+        fi
+    else
+        echo -e "${YELLOW}ping not found. Skipping ping method...${NC}"
+    fi
+
+    # Method 3: Use wget to download a small file from google.com
+    if command -v wget &> /dev/null; then
+        wget -q --spider --timeout=5 http://google.com > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}Internet Connection (wget method): OK${NC}"
+            sleep 2
+            return 0
+        else
+            echo -e "${YELLOW}wget method failed.${NC}"
+        fi
+    else
+        echo -e "${YELLOW}wget not found. Skipping wget method...${NC}"
+    fi
+
+    # If all methods fail, report no internet connection
+    echo -e "${RED}No internet connection!${NC}"
+    echo -e "${YELLOW}Please check your network configuration:${NC}"
+    echo -e "${YELLOW}- Ensure your network interface is up (use 'ip a' to check).${NC}"
+    echo -e "${YELLOW}- Verify DNS settings in /etc/resolv.conf.${NC}"
+    echo -e "${YELLOW}- Contact your VPS provider if the issue persists.${NC}"
+    exit 1
 }
 
 #=============[ Step 3: Install Required Packages ]================
