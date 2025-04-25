@@ -67,7 +67,7 @@ check_system() {
         echo -e "${YELLOW}This module is required for OpenVPN.${NC}"
         echo -e "${YELLOW}Possible solutions:${NC}"
         echo -e "${YELLOW}- If you're using a VPS, contact your provider to enable the 'tun' module.${NC}"
-        echo -e "${YELLOW}- If you're using OpenVZ, you may need to enable TUN/TAP in the VPS control panel.${NC}"
+        echoing -e "${YELLOW}- If you're using OpenVZ, you may need to enable TUN/TAP in the VPS control panel.${NC}"
         echo -e "${YELLOW}- Alternatively, you can use a different virtualization type (e.g., KVM) that supports 'tun' by default.${NC}"
         exit 1
     fi
@@ -86,13 +86,29 @@ setup_network() {
     echo "nameserver 8.8.4.4" >> /etc/resolv.conf
     echo -e "${GREEN}DNS set to Google DNS (8.8.8.8, 8.8.4.4)${NC}"
 
-    # Internet connection check
-    ping -c 1 8.8.8.8 > /dev/null 2>&1
+    # Display network interface status for diagnostics
+    echo -e "${YELLOW}Network Interface Status:${NC}"
+    ip a || {
+        echo -e "${RED}Failed to fetch network interface status!${NC}"
+    }
+
+    # Display current DNS settings
+    echo -e "${YELLOW}Current DNS Settings:${NC}"
+    cat /etc/resolv.conf || {
+        echo -e "${RED}Failed to read /etc/resolv.conf!${NC}"
+    }
+
+    # Internet connection check using curl (more reliable than ping)
+    echo -e "${YELLOW}Checking internet connection...${NC}"
+    curl -s --connect-timeout 5 http://www.google.com > /dev/null
     if [ $? -ne 0 ]; then
         echo -e "${RED}No internet connection!${NC}"
         echo -e "${YELLOW}Please check your network configuration:${NC}"
         echo -e "${YELLOW}- Ensure your network interface is up (use 'ip a' to check).${NC}"
-        echo -e "${YELLOW}- Verify DNS settings in /etc/resolv.conf.${NC}"
+        echo -e "${YELLOW}- Verify DNS settings in /etc/resolv.conf (should have 'nameserver 8.8.8.8').${NC}"
+        echo -e "${YELLOW}- Test DNS resolution (use 'nslookup google.com').${NC}"
+        echo -e "${YELLOW}- Test connectivity (use 'curl -v http://www.google.com').${NC}"
+        echo -e "${YELLOW}- Check if your VPS provider blocks outbound traffic (e.g., ICMP or HTTP).${NC}"
         echo -e "${YELLOW}- Contact your VPS provider if the issue persists.${NC}"
         exit 1
     fi
