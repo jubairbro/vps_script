@@ -1,98 +1,89 @@
 #!/bin/bash
 
-#=============[ Start Firewall Script ]================
+# Load utilities
+if [ ! -f "utils.sh" ]; then
+    echo -e "${RED}utils.sh not found! Please ensure it exists in the same directory.${NC}"
+    exit 1
+fi
+source utils.sh
+
+# Clear the screen
 clear
 
-# Color variables for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Display logo
+display_logo
 
-# Header logo
-echo -e "${RED}"
-figlet -f big "FIREWALL"
-echo -e "${NC}"
-
-# Firewall Menu
-echo -e "${BLUE}╔════════════ FIREWALL ════════════╗${NC}"
-echo -e "${BLUE}║ [01] Enable Basic Firewall       ║${NC}"
-echo -e "${BLUE}║ [02] Disable Firewall            ║${NC}"
-echo -e "${BLUE}║ [03] Allow Specific Port         ║${NC}"
-echo -e "${BLUE}║ [04] Block Specific Port         ║${NC}"
-echo -e "${BLUE}║ [05] View Firewall Rules         ║${NC}"
-echo -e "${BLUE}╚══════════════════════════════════╝${NC}"
-echo -e "${RED}[0] Back to Main Menu${NC}"
+# Display Firewall menu
+display_header "Firewall Menu"
+echo -e "${BLUE}║ [1] Enable Firewall         ║${NC}"
+echo -e "${BLUE}║ [2] Disable Firewall        ║${NC}"
+echo -e "${BLUE}║ [3] Add Firewall Rule       ║${NC}"
+echo -e "${BLUE}║ [0] Back to Main Menu       ║${NC}"
+echo -e "${BLUE}╚═════════════════════════════╝${NC}"
 
 # User input
 read -p "Select Option: " OPTION
 
+# Input validation
+if ! [[ "$OPTION" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}Invalid input! Please enter a number.${NC}"
+    sleep 2
+    bash firewall.sh
+fi
+
 case $OPTION in
+    0)
+        bash main.sh
+        ;;
     1)
-        # Enable Basic Firewall
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║        Enable Basic Firewall         ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        ufw allow 22/tcp
-        ufw allow 80/tcp
-        ufw allow 443/tcp
-        ufw allow 1194/tcp
-        ufw allow 10000:10003/tcp
-        ufw enable
-        echo -e "${GREEN}Basic firewall enabled! Allowed ports: 22, 80, 443, 1194, 10000-10003${NC}"
+        clear
+        display_header "Enable Firewall"
+        ufw --force enable || {
+            echo -e "${RED}Failed to enable firewall!${NC}"
+            sleep 2
+            bash firewall.sh
+        }
+        echo -e "${GREEN}Firewall enabled successfully!${NC}"
         sleep 2
         bash firewall.sh
         ;;
     2)
-        # Disable Firewall
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║          Disable Firewall            ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        ufw disable
-        echo -e "${GREEN}Firewall disabled!${NC}"
+        clear
+        display_header "Disable Firewall"
+        ufw disable || {
+            echo -e "${RED}Failed to disable firewall!${NC}"
+            sleep 2
+            bash firewall.sh
+        }
+        echo -e "${GREEN}Firewall disabled successfully!${NC}"
         sleep 2
         bash firewall.sh
         ;;
     3)
-        # Allow Specific Port
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║         Allow Specific Port          ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        read -p "Enter Port to Allow (e.g., 8080): " PORT
-        ufw allow "$PORT"
-        echo -e "${GREEN}Port $PORT allowed!${NC}"
-        sleep 2
-        bash firewall.sh
-        ;;
-    4)
-        # Block Specific Port
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║         Block Specific Port          ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        read -p "Enter Port to Block (e.g., 8080): " PORT
-        ufw deny "$PORT"
-        echo -e "${GREEN}Port $PORT blocked!${NC}"
-        sleep 2
-        bash firewall.sh
-        ;;
-    5)
-        # View Firewall Rules
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║         View Firewall Rules          ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        ufw status
-        echo -e "${RED}Press 0 to return${NC}"
-        read -p "Option: " OPTION
-        if [ "$OPTION" = "0" ]; then
+        clear
+        display_header "Add Firewall Rule"
+        read -p "Enter port to allow (e.g., 22): " PORT
+        validate_port "$PORT" || {
+            sleep 2
+            bash firewall.sh
+        }
+        read -p "Enter protocol (tcp/udp): " PROTOCOL
+        if [ "$PROTOCOL" != "tcp" ] && [ "$PROTOCOL" != "udp" ]; then
+            echo -e "${RED}Invalid protocol! Please enter 'tcp' or 'udp'.${NC}"
+            sleep 2
             bash firewall.sh
         fi
-        ;;
-    0)
-        bash main.sh
+        ufw allow "$PORT/$PROTOCOL" || {
+            echo -e "${RED}Failed to add firewall rule!${NC}"
+            sleep 2
+            bash firewall.sh
+        }
+        echo -e "${GREEN}Firewall rule added: Allow $PORT/$PROTOCOL${NC}"
+        sleep 2
+        bash firewall.sh
         ;;
     *)
-        echo -e "${RED}Invalid input! Try again.${NC}"
+        echo -e "${RED}Invalid option! Please select a number between 0 and 3.${NC}"
         sleep 2
         bash firewall.sh
         ;;

@@ -1,91 +1,133 @@
 #!/bin/bash
 
-#=============[ Start Hidden Storage Script ]================
+# Load utilities
+if [ ! -f "utils.sh" ]; then
+    echo -e "${RED}utils.sh not found! Please ensure it exists in the same directory.${NC}"
+    exit 1
+fi
+source utils.sh
+
+# Clear the screen
 clear
 
-# Color variables for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Display logo
+display_logo
 
-# Header logo
-echo -e "${RED}"
-figlet -f big "HIDDEN STORAGE"
-echo -e "${NC}"
-
-# Hidden Storage Menu
-echo -e "${BLUE}╔════════════ HIDDEN STORAGE ════════════╗${NC}"
-echo -e "${BLUE}║ [01] Setup Hidden Storage             ║${NC}"
-echo -e "${BLUE}║ [02] View Hidden Storage Content      ║${NC}"
-echo -e "${BLUE}║ [03] Clear Hidden Storage             ║${NC}"
-echo -e "${BLUE}╚═══════════════════════════════════════╝${NC}"
-echo -e "${RED}[0] Back to Main Menu${NC}"
+# Display Hidden Storage menu
+display_header "Hidden Storage Menu"
+echo -e "${BLUE}║ [1] Create Hidden File      ║${NC}"
+echo -e "${BLUE}║ [2] View Hidden File        ║${NC}"
+echo -e "${BLUE}║ [3] Delete Hidden File      ║${NC}"
+echo -e "${BLUE}║ [0] Back to Main Menu       ║${NC}"
+echo -e "${BLUE}╚═════════════════════════════╝${NC}"
 
 # User input
 read -p "Select Option: " OPTION
 
+# Input validation
+if ! [[ "$OPTION" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}Invalid input! Please enter a number.${NC}"
+    sleep 2
+    bash hidden_storage.sh
+fi
+
+# Hidden storage directory
+HIDDEN_DIR="/root/vps_script/.JubairVault/hidden"
+
 case $OPTION in
+    0)
+        bash main.sh
+        ;;
     1)
-        # Setup Hidden Storage
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║         Setup Hidden Storage         ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        HIDDEN_DIR="/root/vps_script/.JubairVault"
-        mkdir -p "$HIDDEN_DIR"
-        chmod 700 "$HIDDEN_DIR"
-        
-        # Move existing logs and backups to hidden storage
-        mv /root/vps_script/*.log "$HIDDEN_DIR/" 2>/dev/null
-        mv /root/backups/* "$HIDDEN_DIR/" 2>/dev/null
-        echo -e "${GREEN}Hidden storage setup at $HIDDEN_DIR!${NC}"
-        
-        # Update script paths to use hidden storage
-        sed -i "s#/root/vps_script/telegram_bot.log#$HIDDEN_DIR/telegram_bot.log#" /root/vps_script/telegram_bot.sh
-        sed -i "s#/root/vps_script/speedtest_result.txt#$HIDDEN_DIR/speedtest_result.txt#" /root/vps_script/speedtest.sh
-        sed -i "s#/root/backups#$HIDDEN_DIR#" /root/vps_script/backup_restore.sh
-        echo -e "${GREEN}Scripts updated to use hidden storage!${NC}"
+        clear
+        display_header "Create Hidden File"
+        mkdir -p "$HIDDEN_DIR" || {
+            echo -e "${RED}Failed to create hidden directory!${NC}"
+            sleep 2
+            bash hidden_storage.sh
+        }
+        chmod 700 "$HIDDEN_DIR" || {
+            echo -e "${RED}Failed to set permissions for hidden directory!${NC}"
+            sleep 2
+            bash hidden_storage.sh
+        }
+        read -p "Enter file name: " FILENAME
+        if [ -z "$FILENAME" ]; then
+            echo -e "${RED}File name cannot be empty!${NC}"
+            sleep 2
+            bash hidden_storage.sh
+        fi
+        read -p "Enter content to store: " CONTENT
+        if [ -z "$CONTENT" ]; then
+            echo -e "${RED}Content cannot be empty!${NC}"
+            sleep 2
+            bash hidden_storage.sh
+        fi
+        echo "$CONTENT" > "$HIDDEN_DIR/$FILENAME" || {
+            echo -e "${RED}Failed to create hidden file!${NC}"
+            sleep 2
+            bash hidden_storage.sh
+        }
+        echo -e "${GREEN}Hidden file $FILENAME created successfully!${NC}"
         sleep 2
         bash hidden_storage.sh
         ;;
     2)
-        # View Hidden Storage Content
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║      View Hidden Storage Content     ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        HIDDEN_DIR="/root/vps_script/.JubairVault"
-        if [ -d "$HIDDEN_DIR" ]; then
-            ls -lh "$HIDDEN_DIR"
-        else
-            echo -e "${YELLOW}Hidden storage not set up!${NC}"
-        fi
-        echo -e "${RED}Press 0 to return${NC}"
-        read -p "Option: " OPTION
-        if [ "$OPTION" = "0" ]; then
+        clear
+        display_header "View Hidden File"
+        if [ ! -d "$HIDDEN_DIR" ] || [ -z "$(ls -A $HIDDEN_DIR)" ]; then
+            echo -e "${RED}No hidden files found!${NC}"
+            sleep 2
             bash hidden_storage.sh
         fi
+        echo -e "${YELLOW}Available hidden files:${NC}"
+        ls -1 "$HIDDEN_DIR" | while read -r file; do
+            echo -e "${GREEN}$file${NC}"
+        done
+        read -p "Enter file name to view: " FILENAME
+        if [ ! -f "$HIDDEN_DIR/$FILENAME" ]; then
+            echo -e "${RED}File $FILENAME not found!${NC}"
+            sleep 2
+            bash hidden_storage.sh
+        fi
+        echo -e "${YELLOW}Content of $FILENAME:${NC}"
+        cat "$HIDDEN_DIR/$FILENAME" || {
+            echo -e "${RED}Failed to read hidden file!${NC}"
+            sleep 2
+            bash hidden_storage.sh
+        }
+        read -p "Press Enter to continue..."
+        bash hidden_storage.sh
         ;;
     3)
-        # Clear Hidden Storage
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║        Clear Hidden Storage          ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        HIDDEN_DIR="/root/vps_script/.JubairVault"
-        if [ -d "$HIDDEN_DIR" ]; then
-            rm -rf "$HIDDEN_DIR"/*
-            echo -e "${GREEN}Hidden storage cleared!${NC}"
-        else
-            echo -e "${YELLOW}Hidden storage not set up!${NC}"
+        clear
+        display_header "Delete Hidden File"
+        if [ ! -d "$HIDDEN_DIR" ] || [ -z "$(ls -A $HIDDEN_DIR)" ]; then
+            echo -e "${RED}No hidden files found!${NC}"
+            sleep 2
+            bash hidden_storage.sh
         fi
+        echo -e "${YELLOW}Available hidden files:${NC}"
+        ls -1 "$HIDDEN_DIR" | while read -r file; do
+            echo -e "${GREEN}$file${NC}"
+        done
+        read -p "Enter file name to delete: " FILENAME
+        if [ ! -f "$HIDDEN_DIR/$FILENAME" ]; then
+            echo -e "${RED}File $FILENAME not found!${NC}"
+            sleep 2
+            bash hidden_storage.sh
+        fi
+        rm "$HIDDEN_DIR/$FILENAME" || {
+            echo -e "${RED}Failed to delete hidden file!${NC}"
+            sleep 2
+            bash hidden_storage.sh
+        }
+        echo -e "${GREEN}Hidden file $FILENAME deleted successfully!${NC}"
         sleep 2
         bash hidden_storage.sh
         ;;
-    0)
-        bash main.sh
-        ;;
     *)
-        echo -e "${RED}Invalid input! Try again.${NC}"
+        echo -e "${RED}Invalid option! Please select a number between 0 and 3.${NC}"
         sleep 2
         bash hidden_storage.sh
         ;;

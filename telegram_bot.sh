@@ -1,99 +1,231 @@
 #!/bin/bash
 
-#=============[ Start Telegram Bot Menu Script ]================
+# Load utilities
+if [ ! -f "utils.sh" ]; then
+    echo -e "${RED}utils.sh not found! Please ensure it exists in the same directory.${NC}"
+    exit 1
+fi
+source utils.sh
+
+# Clear the screen
 clear
 
-# Color variables for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Display logo
+display_logo
 
-# Header logo
-echo -e "${RED}"
-figlet -f big "TELEGRAM BOT"
-echo -e "${NC}"
-
-# Telegram Bot Menu
-echo -e "${BLUE}╔════════════ TELEGRAM BOT ════════════╗${NC}"
-echo -e "${BLUE}║ [01] Start Telegram Bot             ║${NC}"
-echo -e "${BLUE}║ [02] Stop Telegram Bot              ║${NC}"
-echo -e "${BLUE}║ [03] Check Bot Status               ║${NC}"
-echo -e "${BLUE}║ [04] Edit Bot Token & UID           ║${NC}"
-echo -e "${BLUE}╚═════════════════════════════════════╝${NC}"
-echo -e "${RED}[0] Back to Main Menu${NC}"
+# Display Bot Panel menu
+display_header "Bot Panel Menu"
+echo -e "${BLUE}║ [1] Start Telegram Bot      ║${NC}"
+echo -e "${BLUE}║ [2] Stop Telegram Bot       ║${NC}"
+echo -e "${BLUE}║ [3] Check Bot Status        ║${NC}"
+echo -e "${BLUE}║ [4] Add User to Whitelist   ║${NC}"
+echo -e "${BLUE}║ [5] View Whitelist          ║${NC}"
+echo -e "${BLUE}║ [6] Set Bot Token           ║${NC}"
+echo -e "${BLUE}║ [7] Set Chat ID             ║${NC}"
+echo -e "${BLUE}║ [8] View Bot Logs           ║${NC}"
+echo -e "${BLUE}║ [0] Back to Main Menu       ║${NC}"
+echo -e "${BLUE}╚═════════════════════════════╝${NC}"
 
 # User input
 read -p "Select Option: " OPTION
 
+# Input validation
+if ! [[ "$OPTION" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}Invalid input! Please enter a number.${NC}"
+    sleep 2
+    bash telegram_bot.sh
+fi
+
+# Paths
+WHITELIST_FILE="/root/vps_script/.JubairVault/whitelist.txt"
+CONFIG_FILE="/root/vps_script/.JubairVault/bot_config.json"
+LOG_FILE="/root/vps_script/telegram-bot.log"
+
+# Ensure whitelist file exists
+if [ ! -f "$WHITELIST_FILE" ]; then
+    echo "your_owner_id_here" > "$WHITELIST_FILE"
+    chmod 600 "$WHITELIST_FILE" || {
+        echo -e "${RED}Failed to set permissions for whitelist file!${NC}"
+        sleep 2
+        bash telegram_bot.sh
+    }
+fi
+
 case $OPTION in
+    0)
+        bash main.sh
+        ;;
     1)
-        # Start Telegram bot
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║         Starting Telegram Bot        ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        if ! pgrep -f "telegram_bot.py" > /dev/null; then
-            nohup python3 /root/vps_script/telegram_bot.py > /root/vps_script/telegram_bot.log 2>&1 &
-            echo -e "${GREEN}Telegram bot started!${NC}"
+        clear
+        display_header "Start Telegram Bot"
+        if pgrep -f "telegram-bot.py" >/dev/null; then
+            echo -e "${RED}Telegram bot is already running!${NC}"
+            sleep 2
+            bash telegram_bot.sh
+        fi
+        # Check if bot token and chat ID are set
+        if ! jq -e '.bot_token and .chat_id' "$CONFIG_FILE" >/dev/null 2>&1; then
+            echo -e "${RED}Bot token or chat ID not set! Please set them first using options 6 and 7.${NC}"
+            sleep 2
+            bash telegram_bot.sh
+        fi
+        nohup python3 /root/vps_script/telegram-bot.py &>>"$LOG_FILE" &
+        sleep 1
+        if pgrep -f "telegram-bot.py" >/dev/null; then
+            echo -e "${GREEN}Telegram bot started successfully!${NC}"
         else
-            echo -e "${YELLOW}Telegram bot is already running!${NC}"
+            echo -e "${RED}Failed to start Telegram bot! Check $LOG_FILE for details.${NC}"
         fi
         sleep 2
         bash telegram_bot.sh
         ;;
     2)
-        # Stop Telegram bot
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║         Stopping Telegram Bot        ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        pkill -f "telegram_bot.py"
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}Telegram bot stopped!${NC}"
-        else
-            echo -e "${YELLOW}Telegram bot is not running!${NC}"
+        clear
+        display_header "Stop Telegram Bot"
+        if ! pgrep -f "telegram-bot.py" >/dev/null; then
+            echo -e "${RED}Telegram bot is not running!${NC}"
+            sleep 2
+            bash telegram_bot.sh
         fi
+        pkill -f "telegram-bot.py" || {
+            echo -e "${RED}Failed to stop Telegram bot!${NC}"
+            sleep 2
+            bash telegram_bot.sh
+        }
+        echo -e "${GREEN}Telegram bot stopped successfully!${NC}"
         sleep 2
         bash telegram_bot.sh
         ;;
     3)
-        # Check bot status
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║         Check Bot Status             ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        if pgrep -f "telegram_bot.py" > /dev/null; then
-            echo -e "${GREEN}Telegram bot is running!${NC}"
-            echo -e "${YELLOW}Log Output:${NC}"
-            tail -n 10 /root/vps_script/telegram_bot.log
+        clear
+        display_header "Check Bot Status"
+        if pgrep -f "telegram-bot.py" >/dev/null; then
+            echo -e "${GREEN}Telegram bot is running.${NC}"
         else
-            echo -e "${RED}Telegram bot is not running!${NC}"
+            echo -e "${RED}Telegram bot is not running.${NC}"
         fi
-        echo -e "${RED}Press 0 to return${NC}"
-        read -p "Option: " OPTION
-        if [ "$OPTION" = "0" ]; then
-            bash telegram_bot.sh
-        fi
+        read -p "Press Enter to continue..."
+        bash telegram_bot.sh
         ;;
     4)
-        # Edit bot token & UID
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║        Edit Bot Token & UID          ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        read -p "Enter Telegram Bot Token: " BOT_TOKEN
-        read -p "Enter Owner UID: " OWNER_UID
-        
-        # Update telegram_bot.py with new token and UID
-        sed -i "s/BOT_TOKEN = \".*\"/BOT_TOKEN = \"$BOT_TOKEN\"/" /root/vps_script/telegram_bot.py
-        sed -i "s/OWNER_UID = \".*\"/OWNER_UID = \"$OWNER_UID\"/" /root/vps_script/telegram_bot.py
-        echo -e "${GREEN}Bot Token and UID updated successfully!${NC}"
+        clear
+        display_header "Add User to Whitelist"
+        read -p "Enter Telegram User ID to whitelist: " USER_ID
+        if [ -z "$USER_ID" ]; then
+            echo -e "${RED}User ID cannot be empty!${NC}"
+            sleep 2
+            bash telegram_bot.sh
+        fi
+        if ! [[ "$USER_ID" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}Invalid User ID! Please enter a numeric ID.${NC}"
+            sleep 2
+            bash telegram_bot.sh
+        fi
+        if grep -q "$USER_ID" "$WHITELIST_FILE"; then
+            echo -e "${RED}User ID $USER_ID is already in the whitelist!${NC}"
+            sleep 2
+            bash telegram_bot.sh
+        fi
+        echo "$USER_ID" >> "$WHITELIST_FILE" || {
+            echo -e "${RED}Failed to add user to whitelist!${NC}"
+            sleep 2
+            bash telegram_bot.sh
+        }
+        echo -e "${GREEN}User ID $USER_ID added to whitelist successfully!${NC}"
         sleep 2
         bash telegram_bot.sh
         ;;
-    0)
-        bash main.sh
+    5)
+        clear
+        display_header "View Whitelist"
+        if [ ! -s "$WHITELIST_FILE" ]; then
+            echo -e "${RED}Whitelist is empty!${NC}"
+        else
+            echo -e "${YELLOW}Whitelisted User IDs:${NC}"
+            cat "$WHITELIST_FILE" | while read -r user_id; do
+                echo -e "${GREEN}$user_id${NC}"
+            done
+        fi
+        read -p "Press Enter to continue..."
+        bash telegram_bot.sh
+        ;;
+    6)
+        clear
+        display_header "Set Bot Token"
+        read -p "Enter Bot Token: " BOT_TOKEN
+        if [ -z "$BOT_TOKEN" ]; then
+            echo -e "${RED}Bot token cannot be empty!${NC}"
+            sleep 2
+            bash telegram_bot.sh
+        fi
+        # Update bot_config.json
+        if [ ! -f "$CONFIG_FILE" ]; then
+            echo '{"bot_token": "", "chat_id": ""}' > "$CONFIG_FILE"
+            chmod 600 "$CONFIG_FILE" || {
+                echo -e "${RED}Failed to set permissions for config file!${NC}"
+                sleep 2
+                bash telegram_bot.sh
+            }
+        fi
+        jq ".bot_token = \"$BOT_TOKEN\"" "$CONFIG_FILE" > tmp.json && mv tmp.json "$CONFIG_FILE" || {
+            echo -e "${RED}Failed to set bot token!${NC}"
+            sleep 2
+            bash telegram_bot.sh
+        }
+        echo -e "${GREEN}Bot token set successfully!${NC}"
+        sleep 2
+        bash telegram_bot.sh
+        ;;
+    7)
+        clear
+        display_header "Set Chat ID"
+        read -p "Enter Chat ID: " CHAT_ID
+        if [ -z "$CHAT_ID" ]; then
+            echo -e "${RED}Chat ID cannot be empty!${NC}"
+            sleep 2
+            bash telegram_bot.sh
+        fi
+        if ! [[ "$CHAT_ID" =~ ^[0-9]+$ ]]; then
+            echo -e "${RED}Invalid Chat ID! Please enter a numeric ID.${NC}"
+            sleep 2
+            bash telegram_bot.sh
+        fi
+        # Update bot_config.json
+        if [ ! -f "$CONFIG_FILE" ]; then
+            echo '{"bot_token": "", "chat_id": ""}' > "$CONFIG_FILE"
+            chmod 600 "$CONFIG_FILE" || {
+                echo -e "${RED}Failed to set permissions for config file!${NC}"
+                sleep 2
+                bash telegram_bot.sh
+            }
+        fi
+        jq ".chat_id = \"$CHAT_ID\"" "$CONFIG_FILE" > tmp.json && mv tmp.json "$CONFIG_FILE" || {
+            echo -e "${RED}Failed to set chat ID!${NC}"
+            sleep 2
+            bash telegram_bot.sh
+        }
+        echo -e "${GREEN}Chat ID set successfully!${NC}"
+        sleep 2
+        bash telegram_bot.sh
+        ;;
+    8)
+        clear
+        display_header "View Bot Logs"
+        if [ -f "$LOG_FILE" ] && [ -s "$LOG_FILE" ]; then
+            echo -e "${YELLOW}Last 20 lines of bot logs:${NC}"
+            tail -n 20 "$LOG_FILE" || {
+                echo -e "${RED}Failed to read bot logs!${NC}"
+                sleep 2
+                bash telegram_bot.sh
+            }
+        else
+            echo -e "${RED}No bot logs found!${NC}"
+        fi
+        read -p "Press Enter to continue..."
+        bash telegram_bot.sh
         ;;
     *)
-        echo -e "${RED}Invalid input! Try again.${NC}"
+        echo -e "${RED}Invalid option! Please select a number between 0 and 8.${NC}"
         sleep 2
         bash telegram_bot.sh
         ;;

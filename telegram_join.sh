@@ -1,60 +1,66 @@
 #!/bin/bash
 
-#=============[ Start Telegram Join Script ]================
+# Load utilities
+if [ ! -f "utils.sh" ]; then
+    echo -e "${RED}utils.sh not found! Please ensure it exists in the same directory.${NC}"
+    exit 1
+fi
+source utils.sh
+
+# Clear the screen
 clear
 
-# Color variables for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Display logo
+display_logo
 
-# Header logo
-echo -e "${RED}"
-figlet -f big "TELEGRAM JOIN"
-echo -e "${NC}"
-
-# Telegram Join Menu
-echo -e "${BLUE}╔════════════ TELEGRAM JOIN ════════════╗${NC}"
-echo -e "${BLUE}║ [01] Join Official Telegram Group    ║${NC}"
-echo -e "${BLUE}║ [02] Check Telegram Link             ║${NC}"
-echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-echo -e "${RED}[0] Back to Main Menu${NC}"
+# Display Telegram Join menu
+display_header "Telegram Join Menu"
+echo -e "${BLUE}║ [1] Join Telegram Group     ║${NC}"
+echo -e "${BLUE}║ [0] Back to Main Menu       ║${NC}"
+echo -e "${BLUE}╚═════════════════════════════╝${NC}"
 
 # User input
 read -p "Select Option: " OPTION
 
+# Input validation
+if ! [[ "$OPTION" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}Invalid input! Please enter a number.${NC}"
+    sleep 2
+    bash telegram_join.sh
+fi
+
+# Telegram group link
+TELEGRAM_GROUP="https://t.me/jubairFF"
+
 case $OPTION in
-    1)
-        # Join Official Telegram Group
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║    Joining Official Telegram Group   ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        TELEGRAM_LINK="https://t.me/JubairFF"
-        echo -e "${YELLOW}Opening Telegram link: $TELEGRAM_LINK${NC}"
-        xdg-open "$TELEGRAM_LINK" 2>/dev/null || echo -e "${RED}xdg-open not available. Please open the link manually: $TELEGRAM_LINK${NC}"
-        sleep 2
-        bash telegram_join.sh
-        ;;
-    2)
-        # Check Telegram Link
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║        Check Telegram Link           ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        TELEGRAM_LINK="https://t.me/JubairFF"
-        echo -e "${GREEN}Current Telegram Link: $TELEGRAM_LINK${NC}"
-        echo -e "${RED}Press 0 to return${NC}"
-        read -p "Option: " OPTION
-        if [ "$OPTION" = "0" ]; then
-            bash telegram_join.sh
-        fi
-        ;;
     0)
         bash main.sh
         ;;
+    1)
+        clear
+        display_header "Join Telegram Group"
+        echo -e "${GREEN}Opening Telegram group link: $TELEGRAM_GROUP${NC}"
+        # Attempt to open the link (depends on the system)
+        if command -v xdg-open >/dev/null 2>&1; then
+            xdg-open "$TELEGRAM_GROUP" || {
+                echo -e "${RED}Failed to open Telegram link! Please open it manually: $TELEGRAM_GROUP${NC}"
+                sleep 2
+                bash telegram_join.sh
+            }
+        elif command -v open >/dev/null 2>&1; then
+            open "$TELEGRAM_GROUP" || {
+                echo -e "${RED}Failed to open Telegram link! Please open it manually: $TELEGRAM_GROUP${NC}"
+                sleep 2
+                bash telegram_join.sh
+            }
+        else
+            echo -e "${YELLOW}No browser opener found. Please open this link manually: $TELEGRAM_GROUP${NC}"
+        fi
+        read -p "Press Enter to continue..."
+        bash telegram_join.sh
+        ;;
     *)
-        echo -e "${RED}Invalid input! Try again.${NC}"
+        echo -e "${RED}Invalid option! Please select a number between 0 and 1.${NC}"
         sleep 2
         bash telegram_join.sh
         ;;

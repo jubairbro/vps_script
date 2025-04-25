@@ -1,92 +1,103 @@
 #!/bin/bash
 
-#=============[ Start Restart Services Script ]================
+# Load utilities
+if [ ! -f "utils.sh" ]; then
+    echo -e "${RED}utils.sh not found! Please ensure it exists in the same directory.${NC}"
+    exit 1
+fi
+source utils.sh
+
+# Clear the screen
 clear
 
-# Color variables for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Display logo
+display_logo
 
-# Header logo
-echo -e "${RED}"
-figlet -f big "RESTART SERVICES"
-echo -e "${NC}"
-
-# Restart Services Menu
-echo -e "${BLUE}╔════════════ RESTART SERVICES ════════════╗${NC}"
-echo -e "${BLUE}║ [01] Restart SSH Service                ║${NC}"
-echo -e "${BLUE}║ [02] Restart OpenVPN Service            ║${NC}"
-echo -e "${BLUE}║ [03] Restart Xray Service               ║${NC}"
-echo -e "${BLUE}║ [04] Restart Nginx Service              ║${NC}"
-echo -e "${BLUE}║ [05] Restart All Services               ║${NC}"
-echo -e "${BLUE}╚═════════════════════════════════════════╝${NC}"
-echo -e "${RED}[0] Back to Main Menu${NC}"
+# Display Restart Services menu
+display_header "Restart Services Menu"
+echo -e "${BLUE}║ [1] Restart Xray            ║${NC}"
+echo -e "${BLUE}║ [2] Restart Nginx           ║${NC}"
+echo -e "${BLUE}║ [3] Restart All Services    ║${NC}"
+echo -e "${BLUE}║ [0] Back to Main Menu       ║${NC}"
+echo -e "${BLUE}╚═════════════════════════════╝${NC}"
 
 # User input
 read -p "Select Option: " OPTION
 
+# Input validation
+if ! [[ "$OPTION" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}Invalid input! Please enter a number.${NC}"
+    sleep 2
+    bash restart_services.sh
+fi
+
 case $OPTION in
+    0)
+        bash main.sh
+        ;;
     1)
-        # Restart SSH Service
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║         Restart SSH Service          ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        systemctl restart ssh
-        echo -e "${GREEN}SSH service restarted!${NC}"
+        clear
+        display_header "Restart Xray"
+        systemctl restart xray || {
+            echo -e "${RED}Failed to restart Xray!${NC}"
+            sleep 2
+            bash restart_services.sh
+        }
+        echo -e "${GREEN}Xray restarted successfully!${NC}"
         sleep 2
         bash restart_services.sh
         ;;
     2)
-        # Restart OpenVPN Service
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║       Restart OpenVPN Service        ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        systemctl restart openvpn@server
-        echo -e "${GREEN}OpenVPN service restarted!${NC}"
+        clear
+        display_header "Restart Nginx"
+        systemctl restart nginx || {
+            echo -e "${RED}Failed to restart Nginx!${NC}"
+            sleep 2
+            bash restart_services.sh
+        }
+        echo -e "${GREEN}Nginx restarted successfully!${NC}"
         sleep 2
         bash restart_services.sh
         ;;
     3)
-        # Restart Xray Service
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║         Restart Xray Service         ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        systemctl restart xray
-        echo -e "${GREEN}Xray service restarted!${NC}"
+        clear
+        display_header "Restart All Services"
+        systemctl restart xray || {
+            echo -e "${RED}Failed to restart Xray!${NC}"
+            sleep 2
+            bash restart_services.sh
+        }
+        systemctl restart nginx || {
+            echo -e "${RED}Failed to restart Nginx!${NC}"
+            sleep 2
+            bash restart_services.sh
+        }
+        systemctl restart openvpn@server || {
+            echo -e "${RED}Failed to restart OpenVPN!${NC}"
+            sleep 2
+            bash restart_services.sh
+        }
+        systemctl restart dropbear || {
+            echo -e "${RED}Failed to restart Dropbear!${NC}"
+            sleep 2
+            bash restart_services.sh
+        }
+        systemctl restart haproxy || {
+            echo -e "${RED}Failed to restart HAProxy!${NC}"
+            sleep 2
+            bash restart_services.sh
+        }
+        systemctl restart slowdns || {
+            echo -e "${RED}Failed to restart SlowDNS!${NC}"
+            sleep 2
+            bash restart_services.sh
+        }
+        echo -e "${GREEN}All services restarted successfully!${NC}"
         sleep 2
         bash restart_services.sh
-        ;;
-    4)
-        # Restart Nginx Service
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║        Restart Nginx Service         ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        systemctl restart nginx
-        echo -e "${GREEN}Nginx service restarted!${NC}"
-        sleep 2
-        bash restart_services.sh
-        ;;
-    5)
-        # Restart All Services
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║         Restart All Services         ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        systemctl restart ssh
-        systemctl restart openvpn@server
-        systemctl restart xray
-        systemctl restart nginx
-        echo -e "${GREEN}All services restarted!${NC}"
-        sleep 2
-        bash restart_services.sh
-        ;;
-    0)
-        bash main.sh
         ;;
     *)
-        echo -e "${RED}Invalid input! Try again.${NC}"
+        echo -e "${RED}Invalid option! Please select a number between 0 and 3.${NC}"
         sleep 2
         bash restart_services.sh
         ;;

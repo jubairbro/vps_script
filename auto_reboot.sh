@@ -1,115 +1,90 @@
 #!/bin/bash
 
-#=============[ Start Auto Reboot Script ]================
+# Load utilities
+if [ ! -f "utils.sh" ]; then
+    echo -e "${RED}utils.sh not found! Please ensure it exists in the same directory.${NC}"
+    exit 1
+fi
+source utils.sh
+
+# Clear the screen
 clear
 
-# Color variables for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Display logo
+display_logo
 
-# Header logo
-echo -e "${RED}"
-figlet -f big "AUTO REBOOT"
-echo -e "${NC}"
-
-# Auto Reboot Menu
-echo -e "${BLUE}╔════════════ AUTO REBOOT ════════════╗${NC}"
-echo -e "${BLUE}║ [01] Set Daily Reboot              ║${NC}"
-echo -e "${BLUE}║ [02] Set Weekly Reboot             ║${NC}"
-echo -e "${BLUE}║ [03] Disable Auto Reboot           ║${NC}"
-echo -e "${BLUE}║ [04] Check Current Schedule        ║${NC}"
-echo -e "${BLUE}║ [05] Reboot Now                    ║${NC}"
-echo -e "${BLUE}╚════════════════════════════════════╝${NC}"
-echo -e "${RED}[0] Back to Main Menu${NC}"
+# Display Auto Reboot menu
+display_header "Auto Reboot Menu"
+echo -e "${BLUE}║ [1] Schedule Daily Reboot   ║${NC}"
+echo -e "${BLUE}║ [2] Disable Auto Reboot     ║${NC}"
+echo -e "${BLUE}║ [3] Check Reboot Status     ║${NC}"
+echo -e "${BLUE}║ [0] Back to Main Menu       ║${NC}"
+echo -e "${BLUE}╚═════════════════════════════╝${NC}"
 
 # User input
 read -p "Select Option: " OPTION
 
+# Input validation
+if ! [[ "$OPTION" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}Invalid input! Please enter a number.${NC}"
+    sleep 2
+    bash auto_reboot.sh
+fi
+
 case $OPTION in
+    0)
+        bash main.sh
+        ;;
     1)
-        # Set daily reboot
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║           Set Daily Reboot           ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        read -p "Enter Reboot Time (HH:MM, e.g., 04:00): " REBOOT_TIME
-        
-        # Validate time format
-        if [[ ! "$REBOOT_TIME" =~ ^[0-2][0-9]:[0-5][0-9]$ ]]; then
-            echo -e "${RED}Invalid time format! Use HH:MM (e.g., 04:00)${NC}"
+        clear
+        display_header "Schedule Daily Reboot"
+        read -p "Enter hour (0-23) for daily reboot: " HOUR
+        if ! [[ "$HOUR" =~ ^[0-9]+$ ]] || [ "$HOUR" -lt 0 ] || [ "$HOUR" -gt 23 ]; then
+            echo -e "${RED}Invalid hour! Please enter a number between 0 and 23.${NC}"
             sleep 2
             bash auto_reboot.sh
         fi
-        
-        # Set cron job for daily reboot
-        HOUR=$(echo $REBOOT_TIME | cut -d: -f1)
-        MINUTE=$(echo $REBOOT_TIME | cut -d: -f2)
-        (crontab -l 2>/dev/null | grep -v "reboot"; echo "$MINUTE $HOUR * * * /sbin/reboot") | crontab -
-        echo -e "${GREEN}Daily reboot scheduled at $REBOOT_TIME!${NC}"
+        read -p "Enter minute (0-59) for daily reboot: " MINUTE
+        if ! [[ "$MINUTE" =~ ^[0-9]+$ ]] || [ "$MINUTE" -lt 0 ] || [ "$MINUTE" -gt 59 ]; then
+            echo -e "${RED}Invalid minute! Please enter a number between 0 and 59.${NC}"
+            sleep 2
+            bash auto_reboot.sh
+        fi
+        (crontab -l 2>/dev/null | grep -v "reboot"; echo "$MINUTE $HOUR * * * /sbin/shutdown -r now") | crontab - || {
+            echo -e "${RED}Failed to schedule daily reboot!${NC}"
+            sleep 2
+            bash auto_reboot.sh
+        }
+        echo -e "${GREEN}Daily reboot scheduled at $HOUR:$MINUTE!${NC}"
         sleep 2
         bash auto_reboot.sh
         ;;
     2)
-        # Set weekly reboot
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║          Set Weekly Reboot           ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        read -p "Enter Reboot Time (HH:MM, e.g., 04:00): " REBOOT_TIME
-        read -p "Enter Day of Week (0-6, 0=Sunday): " DAY
-        
-        # Validate inputs
-        if [[ ! "$REBOOT_TIME" =~ ^[0-2][0-9]:[0-5][0-9]$ || ! "$DAY" =~ ^[0-6]$ ]]; then
-            echo -e "${RED}Invalid input! Time: HH:MM, Day: 0-6${NC}"
+        clear
+        display_header "Disable Auto Reboot"
+        (crontab -l 2>/dev/null | grep -v "reboot") | crontab - || {
+            echo -e "${RED}Failed to disable auto reboot!${NC}"
             sleep 2
             bash auto_reboot.sh
-        fi
-        
-        # Set cron job for weekly reboot
-        HOUR=$(echo $REBOOT_TIME | cut -d: -f1)
-        MINUTE=$(echo $REBOOT_TIME | cut -d: -f2)
-        (crontab -l 2>/dev/null | grep -v "reboot"; echo "$MINUTE $HOUR * * $DAY /sbin/reboot") | crontab -
-        echo -e "${GREEN}Weekly reboot scheduled at $REBOOT_TIME on day $DAY!${NC}"
+        }
+        echo -e "${GREEN}Auto reboot disabled successfully!${NC}"
         sleep 2
         bash auto_reboot.sh
         ;;
     3)
-        # Disable auto reboot
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║         Disable Auto Reboot          ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        (crontab -l 2>/dev/null | grep -v "reboot") | crontab -
-        echo -e "${GREEN}Auto reboot disabled!${NC}"
-        sleep 2
+        clear
+        display_header "Check Reboot Status"
+        if crontab -l 2>/dev/null | grep -q "reboot"; then
+            CRON_LINE=$(crontab -l 2>/dev/null | grep "reboot")
+            echo -e "${GREEN}Auto reboot is scheduled: $CRON_LINE${NC}"
+        else
+            echo -e "${RED}Auto reboot is not scheduled.${NC}"
+        fi
+        read -p "Press Enter to continue..."
         bash auto_reboot.sh
         ;;
-    4)
-        # Check current schedule
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║        Check Current Schedule        ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        crontab -l | grep "reboot" || echo -e "${YELLOW}No reboot schedule set!${NC}"
-        echo -e "${RED}Press 0 to return${NC}"
-        read -p "Option: " OPTION
-        if [ "$OPTION" = "0" ]; then
-            bash auto_reboot.sh
-        fi
-        ;;
-    5)
-        # Reboot now
-        echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║             Reboot Now               ║${NC}"
-        echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-        echo -e "${YELLOW}Rebooting VPS...${NC}"
-        sleep 2
-        reboot
-        ;;
-    0)
-        bash main.sh
-        ;;
     *)
-        echo -e "${RED}Invalid input! Try again.${NC}"
+        echo -e "${RED}Invalid option! Please select a number between 0 and 3.${NC}"
         sleep 2
         bash auto_reboot.sh
         ;;
