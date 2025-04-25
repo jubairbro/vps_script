@@ -791,6 +791,17 @@ install_haproxy() {
         echo -e "${RED}Failed to install HAProxy!${NC}"
         exit 1
     }
+
+    # Check if domain and SSL certificate exist
+    SSL_CERT=""
+    if [ "$DOMAIN" != "_" ] && [ -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem ]; then
+        SSL_CERT="/etc/letsencrypt/live/$DOMAIN/fullchain.pem /etc/letsencrypt/live/$DOMAIN/privkey.pem"
+        echo -e "${GREEN}SSL certificate found for $DOMAIN. Configuring HAProxy with HTTPS...${NC}"
+    else
+        echo -e "${YELLOW}No SSL certificate found or no domain set. Configuring HAProxy with HTTP only...${NC}"
+    fi
+
+    # Configure HAProxy
     cat > /etc/haproxy/haproxy.cfg << EOL
 global
     log /dev/log local0
@@ -810,17 +821,18 @@ defaults
 frontend http_front
     bind *:80
     mode http
+    $([ -z "$SSL_CERT" ] || echo "redirect scheme https code 301 if !{ ssl_fc }")
     default_backend http_back
+
+frontend https_front
+    $([ -z "$SSL_CERT" ] || echo "bind *:443 ssl crt $SSL_CERT")
+    mode tcp
+    default_backend ws_back
 
 backend http_back
     mode http
     balance roundrobin
     server backend1 127.0.0.1:10000 check
-
-frontend ws_front
-    bind *:443
-    mode tcp
-    default_backend ws_back
 
 backend ws_back
     mode tcp
@@ -862,11 +874,10 @@ EOL
             fi
         fi
     fi
-    echo -e "${GREEN}HAProxy installed and configured successfully.${NC}"
+    echo -e "${GREEN}HAProxy installed and configured successfully with domain $DOMAIN.${NC}"
 
     sleep 2
 }
-
 #=============[ Step 10: Install SlowDNS ]================
 install_slowdns() {
     clear
