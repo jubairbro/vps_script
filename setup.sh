@@ -1342,6 +1342,7 @@ installation_complete() {
 #=============[ Execute All Steps ]================
 check_system
 setup_network
+setup_domain_and_ns
 install_packages
 install_ssh
 install_openvpn
