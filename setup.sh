@@ -483,31 +483,69 @@ install_nginx() {
         fi
     fi
 
-    # Configure NGINX for WebSocket
+    # Check if domain is set
+    if [ -z "$DOMAIN" ]; then
+        echo -e "${YELLOW}Domain not set! Using default server_name (_).${NC}"
+        DOMAIN="_"
+    fi
+
+    # Configure NGINX for WebSocket with domain
     cat > /etc/nginx/conf.d/vps.conf << EOL
 server {
     listen 80;
-    server_name _;
+    server_name $DOMAIN;
     location /vmess {
         proxy_pass http://127.0.0.1:10000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
     }
     location /vless {
         proxy_pass http://127.0.0.1:10001;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
     }
     location /trojan {
         proxy_pass http://127.0.0.1:10002;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
     }
 }
 EOL
+
+    # Setup SSL with Let's Encrypt (optional)
+    if [ "$DOMAIN" != "_" ]; then
+        echo -e "${YELLOW}Do you want to setup SSL with Let's Encrypt? (y/n):${NC}"
+        read -p "Choice: " SETUP_SSL
+        if [ "$SETUP_SSL" = "y" ]; then
+            echo -e "${YELLOW}Installing certbot for Let's Encrypt...${NC}"
+            apt install -y certbot python3-certbot-nginx || {
+                echo -e "${RED}Failed to install certbot! SSL setup skipped.${NC}"
+            }
+            if command -v certbot &> /dev/null; then
+                echo -e "${YELLOW}Setting up SSL for $DOMAIN...${NC}"
+                certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --email admin@$DOMAIN || {
+                    echo -e "${RED}Failed to setup SSL with Let's Encrypt! Proceeding without SSL.${NC}"
+                }
+                if [ -f /etc/letsencrypt/live/$DOMAIN/fullchain.pem ]; then
+                    echo -e "${GREEN}SSL setup successful! HTTPS enabled for $DOMAIN.${NC}"
+                else
+                    echo -e "${YELLOW}SSL setup failed. Proceeding with HTTP only.${NC}"
+                fi
+            else
+                echo -e "${YELLOW}certbot not found. Skipping SSL setup...${NC}"
+            fi
+        else
+            echo -e "${GREEN}Skipping SSL setup. Proceeding with HTTP only.${NC}"
+        fi
+    else
+        echo -e "${YELLOW}No domain set. Skipping SSL setup...${NC}"
+    fi
 
     # Restart NGINX based on systemd availability
     if [ "$USE_SYSTEMD" = true ]; then
@@ -533,7 +571,7 @@ EOL
             fi
         fi
     fi
-    echo -e "${GREEN}NGINX installed and configured successfully.${NC}"
+    echo -e "${GREEN}NGINX installed and configured successfully with domain $DOMAIN.${NC}"
 
     sleep 2
 }
