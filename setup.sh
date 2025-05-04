@@ -947,10 +947,24 @@ install_slowdns() {
     clear
     display_header "Installing SlowDNS"
 
+    # Check if the user wants to install SlowDNS
+    echo -e "${YELLOW}Do you want to install SlowDNS? (y/n):${NC}"
+    read -p "Choice: " INSTALL_SLOWDNS
+    if [ "$INSTALL_SLOWDNS" != "y" ] && [ "$INSTALL_SLOWDNS" != "Y" ]; then
+        echo -e "${GREEN}Skipping SlowDNS installation.${NC}"
+        sleep 2
+        return 0
+    fi
+
+    # Try to download the SlowDNS installer
     wget -O /root/slowdns.sh "https://raw.githubusercontent.com/ilyassnobee/slowdns/main/install.sh" || {
-        echo -e "${RED}Failed to download SlowDNS installer!${NC}"
-        exit 1
+        echo -e "${RED}Failed to download SlowDNS installer! The URL might be invalid or the resource is unavailable.${NC}"
+        echo -e "${YELLOW}You can manually install SlowDNS or skip this step. Continuing without SlowDNS...${NC}"
+        sleep 2
+        return 0
     }
+
+    # Execute the SlowDNS installer
     bash /root/slowdns.sh || {
         echo -e "${RED}Failed to install SlowDNS!${NC}"
         exit 1
