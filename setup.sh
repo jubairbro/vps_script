@@ -388,12 +388,13 @@ install_openvpn() {
     clear
     display_header "Installing OpenVPN"
 
+    # Install OpenVPN package
     apt install -y openvpn || {
         echo -e "${RED}Failed to install OpenVPN!${NC}"
         exit 1
     }
 
-    # Download and configure server.conf
+    # Download the default server.conf
     wget -O /etc/openvpn/server.conf "https://raw.githubusercontent.com/OpenVPN/openvpn/master/sample/sample-config-files/server.conf" || {
         echo -e "${RED}Failed to download OpenVPN config!${NC}"
         exit 1
@@ -402,37 +403,51 @@ install_openvpn() {
     # Modify the OpenVPN configuration
     sed -i 's/port 1194/port 1194/' /etc/openvpn/server.conf
     sed -i 's/proto udp/proto tcp/' /etc/openvpn/server.conf
-    sed -i '/explicit-exit-notify/d' /etc/openvpn/server.conf  # Remove explicit-exit-notify
-    echo "cipher AES-256-CBC" >> /etc/openvpn/server.conf      # Add cipher
-    echo "user nobody" >> /etc/openvpn/server.conf            # Set user to nobody
-    echo "group nogroup" >> /etc/openvpn/server.conf          # Set group to nogroup
-    echo "persist-key" >> /etc/openvpn/server.conf            # Add persist-key
-    echo "persist-tun" >> /etc/openvpn/server.conf            # Add persist-tun
 
-    # Enable IP forwarding
-    sysctl -w net.ipv4.ip_forward=1
-    sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
+    # Add cipher to the configuration
+    echo "cipher AES-256-CBC" >> /etc/openvpn/server.conf
+
+    # Remove explicit-exit-notify as it is not supported in server mode
+    sed -i '/explicit-exit-notify/d' /etc/openvpn/server.conf
+
+    # Enable IP forwarding (required for VPN routing)
+    sysctl -w net.ipv4.ip_forward=1 || {
+        echo -e "${YELLOW}Failed to set IP forwarding temporarily. Trying to set permanently...${NC}"
+    }
+    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf || {
+        echo -e "${RED}Failed to set IP forwarding permanently!${NC}"
+        exit 1
+    }
 
     # Generate server keys and certificates (if not already present)
-    if [ ! -f /etc/openvpn/easy-rsa/keys/server.crt ]; then
+    if [ ! -d /etc/openvpn/easy-rsa ]; then
+        apt install -y easy-rsa || {
+            echo -e "${RED}Failed to install easy-rsa!${NC}"
+            exit 1
+        }
         mkdir -p /etc/openvpn/easy-rsa
         cp -r /usr/share/easy-rsa/* /etc/openvpn/easy-rsa/
-        cd /etc/openvpn/easy-rsa/
+        cd /etc/openvpn/easy-rsa || exit 1
+        echo "set_var EASYRSA_BATCH 1" > vars
         ./easyrsa init-pki
         ./easyrsa build-ca nopass
         ./easyrsa gen-req server nopass
         ./easyrsa sign-req server server
         ./easyrsa gen-dh
-        openvpn --genkey --secret ta.key
-        cp pki/ca.crt pki/private/ca.key pki/issued/server.crt pki/private/server.key pki/dh.pem pki/ta.key /etc/openvpn/
-        cd -
+        openvpn --genkey --secret /etc/openvpn/ta.key
+        cp pki/ca.crt pki/private/ca.key pki/issued/server.crt pki/private/server.key pki/dh.pem /etc/openvpn/
+        cp /etc/openvpn/ta.key /etc/openvpn/
     fi
 
-    # Copy Diffie-Hellman parameters and TA key to the config directory
-    cp /etc/openvpn/dh.pem /etc/openvpn/
-    cp /etc/openvpn/ta.key /etc/openvpn/
+    # Update server.conf with certificate paths
+    sed -i 's/;ca ca.crt/ca ca.crt/' /etc/openvpn/server.conf
+    sed -i 's/;cert server.crt/cert server.crt/' /etc/openvpn/server.conf
+    sed -i 's/;key server.key/key server.key/' /etc/openvpn/server.conf
+    sed -i 's/;dh dh2048.pem/dh dh.pem/' /etc/openvpn/server.conf
+    echo "key-direction 0" >> /etc/openvpn/server.conf
+    echo "tls-auth ta.key 0" >> /etc/openvpn/server.conf
 
-    # Enable and start OpenVPN service
+    # Enable and start OpenVPN service based on systemd availability
     if [ "$USE_SYSTEMD" = true ]; then
         systemctl enable openvpn@server || {
             echo -e "${RED}Failed to enable OpenVPN service!${NC}"
@@ -443,6 +458,7 @@ install_openvpn() {
             exit 1
         }
     else
+        # Use service command for non-systemd systems
         if command -v service &> /dev/null; then
             service openvpn@server enable || {
                 echo -e "${RED}Failed to enable OpenVPN service using service command!${NC}"
@@ -453,6 +469,7 @@ install_openvpn() {
                 exit 1
             }
         else
+            # Manual start if service command is unavailable
             if [ -f /etc/init.d/openvpn ]; then
                 /etc/init.d/openvpn start || {
                     echo -e "${RED}Failed to start OpenVPN service manually!${NC}"
@@ -465,14 +482,23 @@ install_openvpn() {
         fi
     fi
 
-    # Check status and log errors
-    if ! systemctl is-active openvpn@server > /dev/null 2>&1; then
-        echo -e "${YELLOW}OpenVPN failed to start. Checking logs...${NC}"
-        journalctl -u openvpn@server.service -n 50 --no-pager
-        exit 1
+    # Check if OpenVPN service is running
+    if [ "$USE_SYSTEMD" = true ]; then
+        if systemctl is-active openvpn@server >/dev/null 2>&1; then
+            echo -e "${GREEN}OpenVPN installed and started successfully.${NC}"
+        else
+            echo -e "${RED}OpenVPN failed to start! Check logs with 'journalctl -u openvpn@server.service'.${NC}"
+            exit 1
+        fi
+    else
+        if pgrep openvpn > /dev/null 2>&1; then
+            echo -e "${GREEN}OpenVPN installed and started successfully.${NC}"
+        else
+            echo -e "${RED}OpenVPN failed to start! Check logs manually.${NC}"
+            exit 1
+        fi
     fi
 
-    echo -e "${GREEN}OpenVPN installed and started successfully.${NC}"
     sleep 2
 }
 
@@ -1383,7 +1409,19 @@ setup_network
 setup_domain_and_ns
 install_packages
 install_ssh
-install_openvpn
+
+# OpenVPN installation with skip option
+clear
+display_header "OpenVPN Installation"
+echo -e "${YELLOW}Do you want to install and configure OpenVPN? (y/n):${NC}"
+read -p "Choice: " INSTALL_OPENVPN
+if [ "$INSTALL_OPENVPN" = "y" ] || [ "$INSTALL_OPENVPN" = "Y" ]; then
+    install_openvpn
+else
+    echo -e "${GREEN}Skipping OpenVPN installation.${NC}"
+    sleep 2
+fi
+
 install_nginx
 install_dropbear
 install_xray
