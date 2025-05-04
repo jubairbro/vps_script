@@ -392,7 +392,7 @@ install_openvpn() {
         echo -e "${RED}Failed to install OpenVPN!${NC}"
         exit 1
     }
-    wget -O /etc/openvpn/server.conf "https://raw.githubusercontent.com/OpenVPN/openvpn/master/sample-config-files/server.conf" || {
+    wget -O /etc/openvpn/server.conf "https://raw.githubusercontent.com/OpenVPN/openvpn/master/sample/sample-config-files/server.conf" || {
         echo -e "${RED}Failed to download OpenVPN config!${NC}"
         exit 1
     }
