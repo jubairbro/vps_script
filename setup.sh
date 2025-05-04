@@ -392,12 +392,26 @@ install_openvpn() {
         echo -e "${RED}Failed to install OpenVPN!${NC}"
         exit 1
     }
+
+    # Download the default server.conf
     wget -O /etc/openvpn/server.conf "https://raw.githubusercontent.com/OpenVPN/openvpn/master/sample/sample-config-files/server.conf" || {
         echo -e "${RED}Failed to download OpenVPN config!${NC}"
         exit 1
     }
+
+    # Modify the OpenVPN configuration
     sed -i 's/port 1194/port 1194/' /etc/openvpn/server.conf
     sed -i 's/proto udp/proto tcp/' /etc/openvpn/server.conf
+
+    # Add cipher to the configuration
+    echo "cipher AES-256-CBC" >> /etc/openvpn/server.conf
+
+    # Remove explicit-exit-notify as it is not supported in server mode
+    sed -i '/explicit-exit-notify/d' /etc/openvpn/server.conf
+
+    # Enable IP forwarding (required for VPN routing)
+    sysctl -w net.ipv4.ip_forward=1
+    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
 
     # Enable and start OpenVPN service based on systemd availability
     if [ "$USE_SYSTEMD" = true ]; then
