@@ -393,7 +393,7 @@ install_openvpn() {
         exit 1
     }
 
-    # Download the default server.conf
+    # Download and configure server.conf
     wget -O /etc/openvpn/server.conf "https://raw.githubusercontent.com/OpenVPN/openvpn/master/sample/sample-config-files/server.conf" || {
         echo -e "${RED}Failed to download OpenVPN config!${NC}"
         exit 1
@@ -402,18 +402,37 @@ install_openvpn() {
     # Modify the OpenVPN configuration
     sed -i 's/port 1194/port 1194/' /etc/openvpn/server.conf
     sed -i 's/proto udp/proto tcp/' /etc/openvpn/server.conf
+    sed -i '/explicit-exit-notify/d' /etc/openvpn/server.conf  # Remove explicit-exit-notify
+    echo "cipher AES-256-CBC" >> /etc/openvpn/server.conf      # Add cipher
+    echo "user nobody" >> /etc/openvpn/server.conf            # Set user to nobody
+    echo "group nogroup" >> /etc/openvpn/server.conf          # Set group to nogroup
+    echo "persist-key" >> /etc/openvpn/server.conf            # Add persist-key
+    echo "persist-tun" >> /etc/openvpn/server.conf            # Add persist-tun
 
-    # Add cipher to the configuration
-    echo "cipher AES-256-CBC" >> /etc/openvpn/server.conf
-
-    # Remove explicit-exit-notify as it is not supported in server mode
-    sed -i '/explicit-exit-notify/d' /etc/openvpn/server.conf
-
-    # Enable IP forwarding (required for VPN routing)
+    # Enable IP forwarding
     sysctl -w net.ipv4.ip_forward=1
-    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+    sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf
 
-    # Enable and start OpenVPN service based on systemd availability
+    # Generate server keys and certificates (if not already present)
+    if [ ! -f /etc/openvpn/easy-rsa/keys/server.crt ]; then
+        mkdir -p /etc/openvpn/easy-rsa
+        cp -r /usr/share/easy-rsa/* /etc/openvpn/easy-rsa/
+        cd /etc/openvpn/easy-rsa/
+        ./easyrsa init-pki
+        ./easyrsa build-ca nopass
+        ./easyrsa gen-req server nopass
+        ./easyrsa sign-req server server
+        ./easyrsa gen-dh
+        openvpn --genkey --secret ta.key
+        cp pki/ca.crt pki/private/ca.key pki/issued/server.crt pki/private/server.key pki/dh.pem pki/ta.key /etc/openvpn/
+        cd -
+    fi
+
+    # Copy Diffie-Hellman parameters and TA key to the config directory
+    cp /etc/openvpn/dh.pem /etc/openvpn/
+    cp /etc/openvpn/ta.key /etc/openvpn/
+
+    # Enable and start OpenVPN service
     if [ "$USE_SYSTEMD" = true ]; then
         systemctl enable openvpn@server || {
             echo -e "${RED}Failed to enable OpenVPN service!${NC}"
@@ -424,7 +443,6 @@ install_openvpn() {
             exit 1
         }
     else
-        # Use service command for non-systemd systems
         if command -v service &> /dev/null; then
             service openvpn@server enable || {
                 echo -e "${RED}Failed to enable OpenVPN service using service command!${NC}"
@@ -435,7 +453,6 @@ install_openvpn() {
                 exit 1
             }
         else
-            # Manual start if service command is unavailable
             if [ -f /etc/init.d/openvpn ]; then
                 /etc/init.d/openvpn start || {
                     echo -e "${RED}Failed to start OpenVPN service manually!${NC}"
@@ -447,8 +464,15 @@ install_openvpn() {
             fi
         fi
     fi
-    echo -e "${GREEN}OpenVPN installed and started successfully.${NC}"
 
+    # Check status and log errors
+    if ! systemctl is-active openvpn@server > /dev/null 2>&1; then
+        echo -e "${YELLOW}OpenVPN failed to start. Checking logs...${NC}"
+        journalctl -u openvpn@server.service -n 50 --no-pager
+        exit 1
+    fi
+
+    echo -e "${GREEN}OpenVPN installed and started successfully.${NC}"
     sleep 2
 }
 
